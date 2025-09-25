@@ -1,2 +1,2 @@
-# APRAG
+# RPRAG
 researching parametric rag

@@ -1,0 +1,27 @@
+# @package _global_
+
+debug: false
+
+paths:
+  model_path: "/mnt/raid5/kangjh/downloads/R3-RAG-Qwen" 
+  dataset_dir: "/mnt/raid5/kangjh/downloads/datasets"
+
+urls:
+  retrieve_url: "http://10.0.12.120:8001/search_batch"
+  split_url: "http://your_split_api_endpoint/split"
+
+
+model:
+  tensor_parallel_size: 1
+  stop_token_id: 151645
+  max_seq_len_to_capture: 8192
+
+experiment:
+  num_search_one_attempt: 10
+  num_of_docs: 12
+  datasets:
+    - "hotpotqa"
+
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

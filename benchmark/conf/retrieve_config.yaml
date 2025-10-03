@@ -1,0 +1,24 @@
+input_file: "/mnt/raid5/kangjh/Research/ParametricReasoning/RPRAG/benchmark/benchmark_records.jsonl"
+debug: false
+
+rag_params:
+  preprocessed_file: "/mnt/raid5/kangjh/Research/ParametricReasoning/RPRAG/benchmark/retrieved_records.jsonl"
+  num_of_docs: 5
+
+retriever:
+  retrieval_method: 'e5'
+  retrieval_model_path: '/mnt/raid5/kangjh/downloads/e5-base-v2'
+  retrieval_query_max_length: 256
+  retrieval_use_fp16: True
+  retrieval_topk: 5
+  retrieval_batch_size: 128  
+  index_path: "/mnt/raid5/kangjh/downloads/Tevatron/wikipedia-nq-corpus-flashragformat/index/e5_Flat.index/e5_Flat.index"
+  corpus_path: "/mnt/raid5/kangjh/downloads/Tevatron/wikipedia-nq-corpus-flashragformat/processed_corpus.jsonl"
+  save_retrieval_cache: false
+  use_retrieval_cache: false
+  retrieval_cache_path: null
+  use_reranker: false
+  faiss_gpu: false
+  use_sentence_transformer: false
+  retrieval_pooling_method: 'mean'
+  instruction: "Retrieve relevant documents to assist in answering the question."

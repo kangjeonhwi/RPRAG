@@ -1,0 +1,26 @@
+# benchmark/NaiveRAG/conf/config.yaml
+
+defaults:
+  - _self_
+
+debug: False
+
+paths:
+  dev_dataset: '/mnt/raid5/kangjh/downloads/datasets/hotpotqa/dev/dev.json'
+  log_dir: ./logs 
+
+model:
+  path: 'meta-llama/Meta-Llama-3-8B-Instruct' 
+  tensor_parallel_size: 1
+
+retrieval:
+  url: 'http://10.0.12.120:8001/search_batch'
+  post_batch_size: 2048
+  ssl_retry: 8
+  num_of_docs: 10
+
+params:
+  max_tokens: 512
+  temperature_main: 0.0
+  temperature_fallback: 0.0
+

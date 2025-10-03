@@ -2,29 +2,40 @@
 
 # --- General Settings ---
 input_file: "/mnt/raid5/kangjh/Research/ParametricReasoning/RPRAG/benchmark/benchmark_records.jsonl"
-debug: True # True로 설정 시, 8개의 레코드만 샘플링하여 실행
-mode: null
+output_file : null # dummy
+debug: False # True로 설정 시, 8개의 레코드만 샘플링하여 실행
+mode: null #dummy
+
 
 # --- NEW: Benchmark Orchestrator Settings ---
 # 여기서 실행할 모든 실험 조합을 정의합니다.
 benchmark_settings:
   # 실행할 모드 리스트
-  modes: ["naive", "rag"]
+  modes: ["rl_iterative"]
   
   # 실행할 모델 정보 (별칭을 키로 사용)
   models:
-    llama3-8b:
-      path: "meta-llama/Meta-Llama-3-8B-Instruct"
+#    llama3-8b:
+#      path: "meta-llama/Meta-Llama-3-8B-Instruct"
+#      stop_token_id: 2 # dummy
 
-    qwen2.5-7b:
-      path: "/mnt/raid5/kangjh/downloads/R3-RAG-Qwen"
-      stop_token_id: 151645
+#    qwen2.5-7b:
+#      path: "Qwen/Qwen2.5-7B-Instruct"
+#      stop_token_id: 151645
+
+      r3-rag:
+        path : "/mnt/raid5/kangjh/downloads/R3-RAG-Qwen"
+        stop_token_id : 151645
+
+    
 
 # --- Default Model Settings (각 모델 설정으로 override 됨) ---
 model:
   tensor_parallel_size: 2
   gpu_memory_utilization: 0.9
   max_seq_len_to_capture: 8192
+  path : null #dummy
+  stop_token_id : null # dummy
 
 # --- Generation Parameters ---
 params:
@@ -39,7 +50,7 @@ urls:
 # --- Mode-specific Parameters ---
 rag_params:
   num_of_docs: 5
-  preprocessed_file: "rag_preprocessed_data.jsonl" 
+  preprocessed_file: "/mnt/raid5/kangjh/Research/ParametricReasoning/RPRAG/benchmark/retrieved_records.jsonl" 
 
 rl_params:
   num_search_one_attempt: 5

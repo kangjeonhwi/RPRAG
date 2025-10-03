@@ -277,10 +277,11 @@ def solve_rl_iterative(cfg: DictConfig, ckpt: LLM, records: List[Dict]):
         
         # 문서 검색
         retrieved_docs = get_retrieval(cfg.urls.retrieve_url, [q['query'] for q in queries_to_retrieve])
+        print(retrieved_docs)
         
         for item, docs in zip(queries_to_retrieve, retrieved_docs):
             idx = item['record_idx']
-            doc_contents = [d['contents'] for d in docs[:cfg.rl_params.num_passages_one_retrieval]]
+            doc_contents = [d['content'] for d in docs[:cfg.rl_params.num_passages_one_retrieval]]
             doc_str = "\n".join(doc_contents)
             records[idx]['docs_retrieved'].append(doc_contents)
             records[idx]['context'] += f"\nThe retrieval documents: {doc_str}"
@@ -310,7 +311,7 @@ def solve_rl_iterative(cfg: DictConfig, ckpt: LLM, records: List[Dict]):
         print(f"Retrieving documents for {len(queries_for_fallback_retrieval)} records for fallback...")
         fallback_docs = get_retrieval(cfg.urls.retrieve_url, [q for _, q in queries_for_fallback_retrieval])
         for (idx, _), docs in zip(queries_for_fallback_retrieval, fallback_docs):
-            doc_contents = [d['contents'] for d in docs[:cfg.rl_params.num_passages_one_retrieval]]
+            doc_contents = [d['content'] for d in docs[:cfg.rl_params.num_passages_one_retrieval]]
             records[idx]['docs_retrieved'].append(doc_contents)
 
     remain_messages = []
@@ -335,14 +336,51 @@ def solve_rl_iterative(cfg: DictConfig, ckpt: LLM, records: List[Dict]):
 # =====================================================================================
 # SECTION 4: MAIN ORCHESTRATOR
 # =====================================================================================
+def solve_init(cfg: DictConfig, input_filepath: str) -> (LLM, List[Dict]):
+    """모델 및 데이터 로딩을 포함한 초기화"""
+    print("Initializing...")
+    
+    # 1. Load Model
+    llm_args = {
+        'model': cfg.model.path,
+        'tensor_parallel_size': 1 if cfg.debug else cfg.model.tensor_parallel_size,
+        'gpu_memory_utilization': cfg.model.gpu_memory_utilization,
+    }
+    # RL 모드와 같이 특정 조건에 따라 파라미터 추가
+    if 'max_seq_len_to_capture' in cfg.model:
+        llm_args['max_seq_len_to_capture'] = cfg.model.max_seq_len_to_capture
+        
+    ckpt = LLM(**llm_args)
+    print(f"✅ Model '{cfg.model.path}' is ready.")
+
+    # 2. Load Records from file
+    records = []
+    with open(input_filepath, 'r', encoding='utf-8') as f:
+        for line in f:
+            records.append(json.loads(line))
+    print(f"✅ Loaded {len(records)} records from {input_filepath}")
+
+    # 3. Debug mode sampling
+    if cfg.debug:
+        sample_size = min(8, len(records))
+        records = random.sample(records, sample_size)
+        print(f"🐞 Debug mode enabled. Sampled {len(records)} records.")
+        
+    # 4. Initialize records state
+    for rec in records:
+        rec['state'] = "initial"
+        rec['resample_times'] = rec.get('resample_times', 0)
+        if 'problem' in rec and 'question' not in rec:
+            rec['question'] = rec['problem']
+            
+    return ckpt, records
 
 def solve(cfg: DictConfig, input_filepath: str):
-    """추론 모드를 선택하고 전체 프로세스를 실행"""
     # output_file 이름은 main 함수에서 설정하므로 여기서는 사용만 함
     output_file_name = cfg.output_file 
     
     ckpt, records = solve_init(cfg, input_filepath)
-    
+
     mode_solvers = {
         "naive": solve_naive,
         "rag": solve_rag,
@@ -374,58 +412,24 @@ def solve(cfg: DictConfig, input_filepath: str):
     # 모델 객체 정리
     del ckpt
 
-# NEW FUNCTION: RAG 데이터 전처리 및 저장
-def preprocess_rag_data(cfg: DictConfig):
-    """RAG 모드를 위한 데이터 전처리: 문서 검색 후 파일로 저장"""
-    input_file = cfg.input_file
-    output_file = cfg.rag_params.preprocessed_file
-    
-    print(f"--- Pre-processing for RAG mode ---")
-    print(f"Loading records from: {input_file}")
-    records = []
-    with open(input_file, 'r', encoding='utf-8') as f:
-        for line in f:
-            records.append(json.loads(line))
-            
-    if cfg.debug:
-        records = random.sample(records, min(8, len(records)))
-        print(f"🐞 Debug mode: Sampled {len(records)} records for pre-processing.")
-
-    all_questions = [rec.get('problem', rec.get('question')) for rec in records]
-    retrieved_docs = get_retrieval(cfg.urls.retrieve_url, all_questions)
-    
-    for rec, docs in zip(records, retrieved_docs):
-        doc_contents = [d['contents'] for d in docs[:cfg.rag_params.num_of_docs]]
-        rec['doc'] = "\n".join(doc_contents)
-    
-    print(f"💾 Saving pre-processed RAG data to: {output_file}")
-    with open(output_file, "w", encoding='utf-8') as f:
-        for record in records:
-            json.dump(record, f, ensure_ascii=False)
-            f.write('\n')
-    print("✅ RAG pre-processing complete.")
-    return output_file
-
-
 # MODIFIED: main 함수가 전체 실험을 관리하는 Orchestrator 역할 수행
 @hydra.main(config_path="conf", config_name="config")
 def main(cfg: DictConfig):
     print("--- 🚀 Unified Benchmarking Script Started ---")
     
-    # RAG 모드가 실험에 포함된 경우, 먼저 데이터 전처리 수행
     rag_input_file = None
     if "rag" in cfg.benchmark_settings.modes:
         preprocessed_file_path = cfg.rag_params.preprocessed_file
-        if not os.path.exists(preprocessed_file_path):
-            rag_input_file = preprocess_rag_data(cfg)
-        else:
+        if os.path.exists(preprocessed_file_path):
             print(f"🔎 Found existing pre-processed RAG data: {preprocessed_file_path}. Skipping pre-processing.")
             rag_input_file = preprocessed_file_path
+        else:
+            print(preprocessed_file_path)
+            print("can't find pre-processed RAG data. Starting pre-processing...")
+            return
 
     # 정의된 모든 실험 조합에 대해 루프 실행
     for mode in cfg.benchmark_settings.modes:
-        
-        # 현재 모드에 맞는 입력 파일 선택
         current_input_file = rag_input_file if mode == "rag" else cfg.input_file
 
         for model_name, model_config in cfg.benchmark_settings.models.items():
@@ -433,17 +437,11 @@ def main(cfg: DictConfig):
             print(f"📊 Mode: {mode}, 모델: {model_name}")
             print(f"{'='*72}")
             
-            # 현재 실행에 맞는 설정으로 cfg 객체를 동적으로 수정
             run_cfg = cfg.copy()
             run_cfg.mode = mode
-            
-            # 기본 모델 설정을 특정 모델 설정으로 덮어쓰기
+        
             OmegaConf.update(run_cfg, "model", model_config, merge=True)
-            
-            # 결과 파일 이름 동적 생성
             run_cfg.output_file = f"results_{mode}_{model_name}.jsonl"
-            
-            # 수정된 설정으로 벤치마크 실행
             solve(run_cfg, input_filepath=current_input_file)
 
     print("\n--- 🎉 All benchmark runs completed! ---")
